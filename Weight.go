@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"net/http"
+	"time"
 )
 
 type WeightRecord struct {
@@ -18,6 +19,11 @@ type WeightRecord struct {
 }
 
 func main() {
+	//加载并解析配置文件
+	viper.SetConfigFile("config.yaml")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatal("Failed to read config file:", err)
+	}
 	//拼接数据库连接字符串
 	dbHost := viper.GetString("database.host")
 	dbPort := viper.GetString("database.port")
@@ -38,7 +44,7 @@ func main() {
 	router := gin.Default()
 
 	// 定义路由处理程序
-	router.GET("/weight", func(c *gin.Context) {
+	router.GET("/getWeightByName", func(c *gin.Context) {
 		// 获取查询参数 name
 		name := c.Query("name")
 
@@ -67,6 +73,29 @@ func main() {
 
 		// 返回查询结果
 		c.JSON(http.StatusOK, weightRecords)
+	})
+
+	// 添加插入数据的路由
+	router.POST("/newWeight", func(c *gin.Context) {
+		// 解析请求体中的JSON数据
+		var record WeightRecord
+		if err := c.ShouldBindJSON(&record); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid JSON"})
+			return
+		}
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		// 执行数据库插入操作
+		result, err := db.Exec("INSERT INTO users (name, weight, create_date) VALUES (?, ?, ?)", record.Name, record.Weight, currentTime)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to insert record"})
+			return
+		}
+
+		// 获取插入数据的ID
+		id, _ := result.LastInsertId()
+
+		// 返回插入成功的响应
+		c.JSON(200, gin.H{"message": "Record inserted", "id": id})
 	})
 
 	// 启动Web服务器
