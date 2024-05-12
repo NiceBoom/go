@@ -19,8 +19,15 @@ type WeightRecord struct {
 	CreateTime string `json:"create_date"`
 }
 
+// WeightReturn 返回体重数据结构
+type WeightReturn struct {
+	Weight     int    `json:"weight"`
+	CreateTime string `json:"create_date"`
+}
+
 // Person 数据库表结构
 type Person struct {
+	ID         int    `json:"id"`
 	Weight     int    `json:"weight"`
 	CreateTime string `json:"create_date"`
 }
@@ -114,7 +121,7 @@ func main() {
 	// 添加插入个人体重接口
 	router.POST("/newPersonWeight", func(c *gin.Context) {
 		// 解析请求体中的JSON数据
-		var record WeightRecord
+		var record Person
 		if err := c.ShouldBindJSON(&record); err != nil {
 			c.JSON(400, gin.H{"error": "Invalid JSON"})
 			return
@@ -122,16 +129,13 @@ func main() {
 		currentTime := time.Now().Format("2006-01-02 15:04:05")
 		// 执行数据库插入操作
 		result, err := db.Exec("INSERT INTO person (weight, create_date) VALUES (?, ?)", record.Weight, currentTime)
-		if err != nil {
+		if err != nil || result == nil {
 			c.JSON(500, gin.H{"error": "Failed to insert record"})
 			return
 		}
 
-		// 获取插入数据的ID
-		id, _ := result.LastInsertId()
-
 		// 返回插入成功的响应
-		c.JSON(200, gin.H{"message": "Record inserted", "id": id})
+		c.JSON(200, gin.H{"message": "Record inserted"})
 	})
 
 	// 根据日期获取个人数据
@@ -166,9 +170,9 @@ func main() {
 		defer rows.Close()
 
 		// 解析查询结果
-		var results []Person
+		var results []WeightReturn
 		for rows.Next() {
-			var record Person
+			var record WeightReturn
 			err := rows.Scan(&record.Weight, &record.CreateTime)
 			if err != nil {
 				log.Println(err)
