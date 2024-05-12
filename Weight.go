@@ -11,11 +11,24 @@ import (
 	"time"
 )
 
+// WeightRecord users数据库表结构
 type WeightRecord struct {
 	ID         int    `json:"id"`
 	Name       string `json:"name"`
 	Weight     int    `json:"weight"`
 	CreateTime string `json:"create_date"`
+}
+
+// Person 数据库表结构
+type Person struct {
+	Weight     int    `json:"weight"`
+	CreateTime string `json:"create_date"`
+}
+
+// DateRange 日期范围结构
+type DateRange struct {
+	StartTime string `json:"starttime"`
+	EndTime   string `json:"endtime"`
 }
 
 func main() {
@@ -96,6 +109,77 @@ func main() {
 
 		// 返回插入成功的响应
 		c.JSON(200, gin.H{"message": "Record inserted", "id": id})
+	})
+
+	// 添加插入个人体重接口
+	router.POST("/newPersonWeight", func(c *gin.Context) {
+		// 解析请求体中的JSON数据
+		var record WeightRecord
+		if err := c.ShouldBindJSON(&record); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid JSON"})
+			return
+		}
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		// 执行数据库插入操作
+		result, err := db.Exec("INSERT INTO person (weight, create_date) VALUES (?, ?)", record.Weight, currentTime)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to insert record"})
+			return
+		}
+
+		// 获取插入数据的ID
+		id, _ := result.LastInsertId()
+
+		// 返回插入成功的响应
+		c.JSON(200, gin.H{"message": "Record inserted", "id": id})
+	})
+
+	// 根据日期获取个人数据
+	router.POST("/getWeightByTime", func(c *gin.Context) {
+		var dateRange DateRange
+		if err := c.ShouldBindJSON(&dateRange); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid JSON"})
+			return
+		}
+
+		// 指定时间格式
+		timeLayout := "2006-01-02 15:04"
+		startTime, err := time.Parse(timeLayout, dateRange.StartTime)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid start time format"})
+			return
+		}
+		endTime, err := time.Parse(timeLayout, dateRange.EndTime)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid end time format"})
+			return
+		}
+
+		// 执行数据库查询
+		query := "SELECT weight, create_date FROM person WHERE create_date >= ? AND create_date <= ?"
+		rows, err := db.Query(query, startTime, endTime)
+		if err != nil {
+			log.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+			return
+		}
+		defer rows.Close()
+
+		// 解析查询结果
+		var results []Person
+		for rows.Next() {
+			var record Person
+			err := rows.Scan(&record.Weight, &record.CreateTime)
+			if err != nil {
+				log.Println(err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+				return
+			}
+			results = append(results, record)
+		}
+
+		// 返回查询结果
+		c.JSON(http.StatusOK, results)
 	})
 
 	// 启动Web服务器
